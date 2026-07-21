@@ -25,11 +25,11 @@ const bookings = ref([])
 const toast = ref('')
 const search = ref('')
 const filter = ref('All')
+const sortOrder = ref('nearest')
 const authMode = ref('login')
 const authError = ref('')
 const authNotice = ref('')
 const authForm = ref({ name: '', email: '', password: '', role: 'member' })
-const ratingChoice = ref({})
 
 const navItems = [
   { id: 'home', label: 'Home' },
@@ -62,17 +62,32 @@ watch([services, activities, users, bookings, activeUser], saveState, { deep: tr
 const serviceTypes = computed(() => ['All', ...new Set(services.value.map(service => service.type))])
 const filteredServices = computed(() => {
   const keyword = search.value.trim().toLowerCase()
-  return services.value.filter(service => (filter.value === 'All' || service.type === filter.value) && (!keyword || `${service.name} ${service.suburb} ${service.type}`.toLowerCase().includes(keyword)))
+  const matchingServices = services.value.filter(service => (filter.value === 'All' || service.type === filter.value) && (!keyword || `${service.name} ${service.suburb} ${service.type}`.toLowerCase().includes(keyword)))
+  return [...matchingServices].sort((first, second) => {
+    if (sortOrder.value === 'rating') return averageRating(second) - averageRating(first)
+    return Number.parseFloat(first.distance) - Number.parseFloat(second.distance)
+  })
 })
 const isAdmin = computed(() => activeUser.value?.role === 'admin')
 const displayName = computed(() => activeUser.value?.name?.split(' ')[0] || 'there')
+const myBookings = computed(() => bookings.value
+  .filter(booking => booking.userId === activeUser.value?.id)
+  .map(booking => ({ booking, activity: activities.value.find(activity => activity.id === booking.activityId) }))
+  .filter(item => item.activity))
+
+function allRatings(service) {
+  return [...(service.ratings || []), ...Object.values(service.userRatings || {})]
+}
 
 function averageRating(service) {
-  if (!service.ratings?.length) return 0
-  return service.ratings.reduce((sum, rating) => sum + rating, 0) / service.ratings.length
+  const ratings = allRatings(service)
+  if (!ratings.length) return 0
+  return ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length
 }
 
 function formatRating(service) { return averageRating(service).toFixed(1) }
+function ratingCount(service) { return allRatings(service).length }
+function currentUserRating(service) { return service.userRatings?.[activeUser.value?.id] || 0 }
 
 function notify(message) {
   toast.value = message
@@ -135,11 +150,8 @@ function addRating(service, rating) {
     return
   }
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) return
-  const previous = ratingChoice.value[service.id]
-  if (previous) service.ratings = service.ratings.map(value => value === previous ? rating : value)
-  else service.ratings.push(rating)
-  ratingChoice.value = { ...ratingChoice.value, [service.id]: rating }
-  notify(`Thanks for rating ${service.name}.`)
+  service.userRatings = { ...(service.userRatings || {}), [activeUser.value.id]: rating }
+  notify(`Your ${rating}-star rating for ${service.name} has been saved.`)
 }
 
 function bookActivity(activity) {
@@ -153,6 +165,13 @@ function bookActivity(activity) {
   bookings.value.push({ id: crypto.randomUUID(), activityId: activity.id, userId: activeUser.value.id })
   activity.seats -= 1
   notify(`Your place in “${activity.title}” is confirmed.`)
+}
+
+function cancelBooking(booking, activity) {
+  if (!activeUser.value || booking.userId !== activeUser.value.id) return
+  bookings.value = bookings.value.filter(item => item.id !== booking.id)
+  activity.seats += 1
+  notify(`Your booking for “${activity.title}” has been cancelled.`)
 }
 
 function addService() {
@@ -211,9 +230,10 @@ function addService() {
 
     <section v-if="currentPage === 'services'" class="page-section">
       <div class="container"><p class="eyebrow">Local support</p><h1>Services that feel close to home.</h1><p class="lead narrow">Search trusted community partners and see ratings from other members.</p>
-        <div class="filters" aria-label="Search support services"><label>Search <input v-model="search" type="search" placeholder="Service or suburb" /></label><label>Category <select v-model="filter"><option v-for="type in serviceTypes" :key="type">{{ type }}</option></select></label></div>
+        <div class="filters" aria-label="Search support services"><label>Search <input v-model="search" type="search" placeholder="Service or suburb" /></label><label>Category <select v-model="filter"><option v-for="type in serviceTypes" :key="type">{{ type }}</option></select></label><label>Sort results <select v-model="sortOrder"><option value="nearest">Nearest first</option><option value="rating">Highest rated</option></select></label></div>
         <p class="result-count">{{ filteredServices.length }} service<span v-if="filteredServices.length !== 1">s</span> found</p>
-        <div class="service-grid"><article v-for="service in filteredServices" :key="service.id" class="service-card"><div class="service-card-head"><span class="tag">{{ service.type }}</span><span class="distance">⌖ {{ service.distance }}</span></div><h2>{{ service.name }}</h2><p class="location">{{ service.suburb }}</p><p>{{ service.description }}</p><div class="rating-summary"><strong aria-label="average rating">★ {{ formatRating(service) }}</strong><span>from {{ service.ratings.length }} rating<span v-if="service.ratings.length !== 1">s</span></span></div><fieldset class="rate-control"><legend>Your rating</legend><button v-for="star in 5" :key="star" type="button" :aria-label="`Rate ${star} out of 5`" :class="{ selected: ratingChoice[service.id] >= star }" @click="addRating(service, star)">★</button></fieldset></article></div>
+        <div v-if="filteredServices.length" class="service-grid"><article v-for="service in filteredServices" :key="service.id" class="service-card"><div class="service-card-head"><span class="tag">{{ service.type }}</span><span class="distance">⌖ {{ service.distance }}</span></div><h2>{{ service.name }}</h2><p class="location">{{ service.suburb }}</p><p>{{ service.description }}</p><div class="rating-summary"><strong aria-label="average rating">★ {{ formatRating(service) }}</strong><span>from {{ ratingCount(service) }} rating<span v-if="ratingCount(service) !== 1">s</span></span></div><fieldset class="rate-control"><legend>{{ activeUser ? 'Your rating (you can update it)' : 'Sign in to rate' }}</legend><button v-for="star in 5" :key="star" type="button" :aria-label="`Rate ${star} out of 5`" :class="{ selected: currentUserRating(service) >= star }" @click="addRating(service, star)">★</button></fieldset></article></div>
+        <div v-else class="empty-state"><h2>No services match that search.</h2><p>Try a different suburb, service name or category.</p><button class="button secondary" @click="search = ''; filter = 'All'">Clear search</button></div>
       </div>
     </section>
 
@@ -224,7 +244,7 @@ function addService() {
     <section v-if="currentPage === 'account'" class="page-section account-section"><div class="container auth-layout">
       <div><p class="eyebrow">Your ElderCare Connect</p><h1>{{ activeUser ? `Hello, ${displayName}.` : 'A little support starts here.' }}</h1><p class="lead">Create a free account to book activities and share ratings with the community.</p><ul class="check-list"><li>Book local activities</li><li>Rate services you have used</li><li>Keep your details in one place</li></ul></div>
       <div v-if="!activeUser" class="auth-card"><div class="auth-tabs"><button :class="{ active: authMode === 'login' }" @click="authMode = 'login'; authError = ''; authNotice = ''">Sign in</button><button :class="{ active: authMode === 'register' }" @click="authMode = 'register'; authError = ''; authNotice = ''">Create account</button></div><form @submit.prevent="handleAuth" novalidate><label v-if="authMode === 'register'">Full name<input v-model="authForm.name" maxlength="50" autocomplete="name" /></label><label>Email address<input v-model="authForm.email" type="email" maxlength="100" autocomplete="email" /></label><label>Password<input v-model="authForm.password" type="password" minlength="8" autocomplete="current-password" /><small>At least 8 characters.</small></label><label v-if="authMode === 'register'">Account type<select v-model="authForm.role"><option value="member">Community member</option><option value="admin">Staff member</option></select><small>Demo accounts use this to show role-based access.</small></label><p v-if="authError" class="form-message error" role="alert">{{ authError }}</p><p v-if="authNotice" class="form-message" role="status">{{ authNotice }}</p><button class="button primary wide" type="submit">{{ authMode === 'login' ? 'Sign in securely' : 'Create my account' }}</button></form></div>
-      <div v-else class="profile-card"><span class="profile-icon">{{ activeUser.name.charAt(0) }}</span><h2>{{ activeUser.name }}</h2><p>{{ activeUser.email }}</p><p><span class="tag">{{ activeUser.role === 'admin' ? 'Staff member' : 'Community member' }}</span></p><button v-if="isAdmin" class="button secondary wide" @click="navigate('admin')">Open staff hub</button><button class="text-button" @click="logOut">Sign out</button></div>
+      <div v-else class="profile-card"><span class="profile-icon">{{ activeUser.name.charAt(0) }}</span><h2>{{ activeUser.name }}</h2><p>{{ activeUser.email }}</p><p><span class="tag">{{ activeUser.role === 'admin' ? 'Staff member' : 'Community member' }}</span></p><div class="booking-summary"><h3>Your activity bookings</h3><p v-if="!myBookings.length">You have no upcoming bookings yet.</p><ul v-else><li v-for="item in myBookings" :key="item.booking.id"><span><strong>{{ item.activity.title }}</strong><small>{{ item.activity.date }}</small></span><button type="button" @click="cancelBooking(item.booking, item.activity)">Cancel</button></li></ul></div><button v-if="isAdmin" class="button secondary wide" @click="navigate('admin')">Open staff hub</button><button class="text-button" @click="logOut">Sign out</button></div>
     </div></section>
 
     <section v-if="currentPage === 'admin' && isAdmin" class="page-section soft-bg"><div class="container"><p class="eyebrow">Staff hub</p><h1>Community overview</h1><p class="lead narrow">This dashboard is protected: only staff accounts can access it.</p><div class="stats-grid"><article><span>Registered users</span><strong>{{ users.length }}</strong></article><article><span>Activity bookings</span><strong>{{ bookings.length }}</strong></article><article><span>Local services</span><strong>{{ services.length }}</strong></article></div><div class="admin-panel"><div><h2>Service directory</h2><p>Maintain the information members see when searching for help.</p></div><button class="button primary" @click="addService">Add draft service</button></div></div></section>
