@@ -34,6 +34,7 @@ const authForm = ref({ name: '', email: '', password: '' })
 const editorError = ref('')
 const editingServiceId = ref(null)
 const serviceForm = ref({ name: '', suburb: '', type: 'Health support', distance: '', description: '' })
+const readingOptions = ref({ largeText: false, highContrast: false })
 
 const navItems = [
   { id: 'home', label: 'Home' },
@@ -47,7 +48,7 @@ const storedState = () => {
 }
 
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ services: services.value, activities: activities.value, users: users.value, bookings: bookings.value, activeUser: activeUser.value }))
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ services: services.value, activities: activities.value, users: users.value, bookings: bookings.value, activeUser: activeUser.value, readingOptions: readingOptions.value }))
 }
 
 onMounted(() => {
@@ -58,11 +59,12 @@ onMounted(() => {
     users.value = Array.isArray(saved.users) ? saved.users : []
     bookings.value = Array.isArray(saved.bookings) ? saved.bookings : []
     activeUser.value = saved.activeUser || null
+    if (saved.readingOptions) readingOptions.value = { ...readingOptions.value, ...saved.readingOptions }
   }
   if (!users.value.some(user => user.email === STAFF_ACCOUNT.email)) users.value.push({ ...STAFF_ACCOUNT })
 })
 
-watch([services, activities, users, bookings, activeUser], saveState, { deep: true })
+watch([services, activities, users, bookings, activeUser, readingOptions], saveState, { deep: true })
 
 const serviceTypes = computed(() => ['All', ...new Set(services.value.map(service => service.type))])
 const filteredServices = computed(() => {
@@ -97,6 +99,11 @@ function currentUserRating(service) { return service.userRatings?.[activeUser.va
 function notify(message) {
   toast.value = message
   window.setTimeout(() => { if (toast.value === message) toast.value = '' }, 3600)
+}
+
+function toggleReadingOption(option) {
+  readingOptions.value = { ...readingOptions.value, [option]: !readingOptions.value[option] }
+  notify(option === 'largeText' ? `Large text is ${readingOptions.value.largeText ? 'on' : 'off'}.` : `High contrast is ${readingOptions.value.highContrast ? 'on' : 'off'}.`)
 }
 
 function navigate(page) {
@@ -224,11 +231,15 @@ function removeDraftService(service) {
 
 <template>
   <a class="skip-link" href="#main-content">Skip to main content</a>
-  <header class="site-header">
+  <header class="site-header" :class="{ 'high-contrast': readingOptions.highContrast, 'large-text': readingOptions.largeText }">
     <div class="container nav-wrap">
       <button class="brand" type="button" aria-label="Go to home" @click="navigate('home')">
         <span class="brand-mark" aria-hidden="true">♥</span><span>ElderCare <b>Connect</b></span>
       </button>
+      <div class="reading-controls" aria-label="Reading options">
+        <button type="button" :aria-pressed="readingOptions.largeText" @click="toggleReadingOption('largeText')">A+</button>
+        <button type="button" :aria-pressed="readingOptions.highContrast" @click="toggleReadingOption('highContrast')">Contrast</button>
+      </div>
       <button class="menu-button" type="button" :aria-expanded="showMenu" aria-controls="primary-nav" @click="showMenu = !showMenu">Menu</button>
       <nav id="primary-nav" :class="{ open: showMenu }" aria-label="Main navigation">
         <button v-for="item in navItems" :key="item.id" type="button" :class="{ active: currentPage === item.id }" @click="navigate(item.id)">{{ item.label }}</button>
@@ -238,7 +249,7 @@ function removeDraftService(service) {
     </div>
   </header>
 
-  <main id="main-content">
+  <main id="main-content" :class="{ 'high-contrast': readingOptions.highContrast, 'large-text': readingOptions.largeText }">
     <section v-if="currentPage === 'home'" class="hero">
       <div class="container hero-grid">
         <div class="hero-copy">
@@ -290,6 +301,6 @@ function removeDraftService(service) {
     <section v-if="currentPage === 'admin' && isAdmin" class="page-section soft-bg"><div class="container"><p class="eyebrow">Staff hub</p><h1>Community overview</h1><p class="lead narrow">This dashboard is protected: only staff accounts can access it.</p><div class="stats-grid"><article><span>Registered users</span><strong>{{ users.length }}</strong></article><article><span>Activity bookings</span><strong>{{ bookings.length }}</strong></article><article><span>Local services</span><strong>{{ services.length }}</strong></article></div><div class="admin-panel"><div><h2>Service directory</h2><p>Maintain the information members see when searching for help.</p></div><button class="button primary" @click="addService">Add service</button></div><div class="service-manager"><article v-for="service in services" :key="service.id"><div><span v-if="service.isDraft" class="draft-tag">Draft</span><h3>{{ service.name }}</h3><p>{{ service.suburb }} · {{ service.type }}</p></div><div class="manager-actions"><button type="button" class="button secondary" @click="openServiceEditor(service)">Edit</button><button v-if="service.isDraft" type="button" class="text-button danger" @click="removeDraftService(service)">Remove draft</button></div></article></div><form v-if="editingServiceId !== null" class="editor-card" @submit.prevent="saveService" novalidate><div class="editor-heading"><h2>Edit service</h2><button type="button" class="text-button" @click="closeServiceEditor">Close</button></div><div class="editor-fields"><label>Service name<input v-model="serviceForm.name" maxlength="60" /></label><label>Suburb<input v-model="serviceForm.suburb" maxlength="40" /></label><label>Category<select v-model="serviceForm.type"><option>Health support</option><option>Social connection</option><option>Learning</option></select></label><label>Distance<input v-model="serviceForm.distance" placeholder="e.g. 2.5 km" maxlength="12" /></label></div><label>Description<textarea v-model="serviceForm.description" maxlength="180" rows="3"></textarea></label><p v-if="editorError" class="form-message error" role="alert">{{ editorError }}</p><button class="button primary" type="submit">Save service</button></form></div></section>
   </main>
 
-  <footer><div class="container footer-wrap"><div><button class="brand inverse" @click="navigate('home')"><span class="brand-mark">♥</span><span>ElderCare <b>Connect</b></span></button><p>Practical support for healthy, connected ageing.</p></div><p>Need urgent help? Call <strong>000</strong> in Australia.</p></div></footer>
+  <footer :class="{ 'high-contrast': readingOptions.highContrast, 'large-text': readingOptions.largeText }"><div class="container footer-wrap"><div><button class="brand inverse" @click="navigate('home')"><span class="brand-mark">♥</span><span>ElderCare <b>Connect</b></span></button><p>Practical support for healthy, connected ageing.</p></div><p>Need urgent help? Call <strong>000</strong> in Australia.</p></div></footer>
   <div v-if="toast" class="toast" role="status">{{ toast }}</div>
 </template>
