@@ -9,6 +9,9 @@ import { createPasswordCredential, migrateLegacyAccounts, verifyPassword } from 
 
 const STORAGE_KEY = 'eldercare-connect-v2'
 const LEGACY_STORAGE_KEY = 'eldercare-connect-v1'
+const SESSION_DURATION_MS = 8 * 60 * 60 * 1000
+const LOGIN_LOCK_DURATION_MS = 60 * 1000
+const MAX_LOGIN_ATTEMPTS = 5
 const STAFF_ACCOUNT = {
   id: 'eldercare-staff',
   name: 'ElderCare Staff',
@@ -49,6 +52,7 @@ const authMode = ref('login')
 const authError = ref('')
 const authNotice = ref('')
 const authPending = ref(false)
+const loginSecurity = ref({ failedAttempts: 0, lockedUntil: 0 })
 const authForm = ref({ name: '', email: '', password: '' })
 const editorError = ref('')
 const editingServiceId = ref(null)
@@ -81,7 +85,7 @@ function readStoredState() {
 }
 
 function sessionUser(account) {
-  return { id: account.id, name: account.name, email: account.email, role: account.role }
+  return { id: account.id, name: account.name, email: account.email, role: account.role, sessionExpiresAt: Date.now() + SESSION_DURATION_MS }
 }
 
 function saveState() {
@@ -92,6 +96,7 @@ function saveState() {
     bookings: bookings.value,
     activeUser: activeUser.value,
     readingOptions: readingOptions.value,
+    loginSecurity: loginSecurity.value,
   }))
 }
 
@@ -103,20 +108,26 @@ onMounted(async () => {
     users.value = Array.isArray(saved.users) ? saved.users : []
     bookings.value = Array.isArray(saved.bookings) ? saved.bookings : []
     if (saved.readingOptions) readingOptions.value = { ...readingOptions.value, ...saved.readingOptions }
+    if (saved.loginSecurity) loginSecurity.value = { ...loginSecurity.value, ...saved.loginSecurity }
   }
+
+  const savedServiceIds = new Set(services.value.map(service => service.id))
+  services.value = [...services.value, ...seedServices.filter(service => !savedServiceIds.has(service.id))]
 
   users.value = await migrateLegacyAccounts(users.value)
   if (!users.value.some(user => user.email === STAFF_ACCOUNT.email)) users.value.push({ ...STAFF_ACCOUNT })
 
   const savedSession = saved?.activeUser
   const sessionAccount = users.value.find(user => user.id === savedSession?.id)
-  activeUser.value = sessionAccount ? sessionUser(sessionAccount) : null
+  const sessionIsValid = savedSession?.sessionExpiresAt && savedSession.sessionExpiresAt > Date.now()
+  activeUser.value = sessionAccount && sessionIsValid ? { ...sessionUser(sessionAccount), sessionExpiresAt: savedSession.sessionExpiresAt } : null
+  if (savedSession && !sessionIsValid) authNotice.value = 'Your session has expired. Please sign in again.'
   localStorage.removeItem(LEGACY_STORAGE_KEY)
   isHydrated.value = true
   saveState()
 })
 
-watch([services, activities, users, bookings, activeUser, readingOptions], () => {
+watch([services, activities, users, bookings, activeUser, readingOptions, loginSecurity], () => {
   if (isHydrated.value) saveState()
 }, { deep: true })
 
@@ -161,6 +172,26 @@ function passwordError(password) {
   return ''
 }
 
+function isLoginLocked() {
+  if (loginSecurity.value.lockedUntil > Date.now()) return true
+  if (loginSecurity.value.lockedUntil) loginSecurity.value = { failedAttempts: 0, lockedUntil: 0 }
+  return false
+}
+
+function recordFailedLogin() {
+  const attempts = loginSecurity.value.failedAttempts + 1
+  if (attempts >= MAX_LOGIN_ATTEMPTS) {
+    loginSecurity.value = { failedAttempts: 0, lockedUntil: Date.now() + LOGIN_LOCK_DURATION_MS }
+    return 'Too many unsuccessful attempts. Please wait one minute before trying again.'
+  }
+  loginSecurity.value = { failedAttempts: attempts, lockedUntil: 0 }
+  return 'Email or password is incorrect. You can create an account instead.'
+}
+
+function resetLoginSecurity() {
+  loginSecurity.value = { failedAttempts: 0, lockedUntil: 0 }
+}
+
 async function handleAuth() {
   if (authPending.value) return
   clearAuthFeedback()
@@ -168,6 +199,7 @@ async function handleAuth() {
   const password = String(authForm.value.password || '')
   if (!/^\S+@\S+\.\S+$/.test(email)) return authError.value = 'Enter a valid email address.'
   if (!password) return authError.value = 'Enter your password.'
+  if (authMode.value === 'login' && isLoginLocked()) return authError.value = 'Too many unsuccessful attempts. Please wait one minute before trying again.'
 
   authPending.value = true
   try {
@@ -184,12 +216,13 @@ async function handleAuth() {
     } else {
       const account = users.value.find(user => user.email === email)
       if (!account || !await verifyPassword(password, account)) {
-        authError.value = 'Email or password is incorrect. You can create an account instead.'
+        authError.value = recordFailedLogin()
         return
       }
       activeUser.value = sessionUser(account)
       notify(`Welcome back, ${account.name}.`)
     }
+    resetLoginSecurity()
     currentPage.value = activeUser.value.role === 'admin' ? 'admin' : 'services'
   } catch {
     authError.value = 'We could not complete sign-in securely. Please try again.'
