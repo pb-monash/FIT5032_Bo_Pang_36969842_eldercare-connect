@@ -23,6 +23,9 @@ const seedServices = [
   { id: 1, name: 'Harbour Wellbeing Hub', suburb: 'Clayton', type: 'Social connection', distance: '1.2 km', description: 'Friendly weekday gatherings, light exercise and a community lunch.', ratings: [5, 4, 5, 4] },
   { id: 2, name: 'Gentle Steps Physio', suburb: 'Oakleigh', type: 'Health support', distance: '3.8 km', description: 'Mobility consultations and small guided movement sessions.', ratings: [5, 4, 4] },
   { id: 3, name: 'Digital Confidence Club', suburb: 'Chadstone', type: 'Learning', distance: '5.1 km', description: 'Patient one-to-one help with phones, video calls and online safety.', ratings: [4, 5, 5, 4, 5] },
+  { id: 4, name: 'Home Safety Check-in', suburb: 'Clayton', type: 'Health support', distance: '2.0 km', description: 'Practical home-safety visits and wellbeing check-ins for older adults.', ratings: [5, 5, 4, 5, 5] },
+  { id: 5, name: 'Neighbourhood Garden Club', suburb: 'Hughesdale', type: 'Social connection', distance: '4.3 km', description: 'Gentle gardening, tea and friendly conversation in an accessible community garden.', ratings: [4, 4, 5, 4] },
+  { id: 6, name: 'Everyday Tech Workshop', suburb: 'Oakleigh', type: 'Learning', distance: '3.1 km', description: 'Small group lessons for online appointments, transport apps and staying safe online.', ratings: [3, 4, 4, 5] },
 ]
 
 const seedActivities = [
