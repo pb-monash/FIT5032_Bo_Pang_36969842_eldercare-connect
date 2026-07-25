@@ -53,3 +53,5 @@ New registrations are always community-member accounts. Staff access is assigned
 ## Notes
 
 This is a course demonstration application. Authentication and data persistence use browser Local Storage only; no production personal data should be entered.
+
+For the final Moodle packaging and video recording steps, see [SUBMISSION_GUIDE.md](SUBMISSION_GUIDE.md).
