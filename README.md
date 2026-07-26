@@ -50,8 +50,3 @@ New registrations are always community-member accounts. Staff access is assigned
 5. Sign in with the staff demo account, open **Staff hub**, edit a service and add/remove a draft service.
 6. Use the **A+** and **Contrast** controls in the header, then refresh to demonstrate accessible reading preferences.
 
-## Notes
-
-This is a course demonstration application. Authentication and data persistence use browser Local Storage only; no production personal data should be entered.
-
-For the final Moodle packaging and video recording steps, see [SUBMISSION_GUIDE.md](SUBMISSION_GUIDE.md).
