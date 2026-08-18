@@ -4,7 +4,10 @@ defineProps({
   authError: { type: String, default: '' },
   authNotice: { type: String, default: '' },
   authPending: { type: Boolean, default: false },
+  authProviderLabel: { type: String, default: 'Local demo auth' },
+  authProviderStatus: { type: String, default: '' },
   displayName: { type: String, default: 'there' },
+  externalAuthReady: { type: Boolean, default: false },
   isAdmin: { type: Boolean, default: false },
   myBookings: { type: Array, required: true },
 })
@@ -26,9 +29,10 @@ function selectMode(mode) {
         <p class="eyebrow">Your ElderCare Connect</p>
         <h1>{{ activeUser ? `Hello, ${displayName}.` : 'A little support starts here.' }}</h1>
         <p class="lead">Create a free account to book activities and share ratings with the community.</p>
-        <ul class="check-list"><li>Book local activities</li><li>Rate services you have used</li><li>Keep your details in one place</li></ul>
+        <ul class="check-list"><li>Book local activities</li><li>Rate services you have used</li><li>{{ externalAuthReady ? 'Sign in through Firebase Authentication' : 'Use local demo auth until Firebase is configured' }}</li></ul>
       </div>
       <div v-if="!activeUser" class="auth-card">
+        <p class="auth-provider-badge"><span>{{ authProviderLabel }}</span><small>{{ authProviderStatus }}</small></p>
         <div class="auth-tabs">
           <button :class="{ active: authMode === 'login' }" @click="selectMode('login')">Sign in</button>
           <button :class="{ active: authMode === 'register' }" @click="selectMode('register')">Create account</button>
@@ -37,16 +41,18 @@ function selectMode(mode) {
           <label v-if="authMode === 'register'">Full name<input v-model="authForm.name" maxlength="50" autocomplete="name" /></label>
           <label>Email address<input v-model="authForm.email" type="email" maxlength="100" autocomplete="email" /></label>
           <label>Password<input v-model="authForm.password" type="password" minlength="8" :autocomplete="authMode === 'register' ? 'new-password' : 'current-password'" /><small>At least 10 characters, including uppercase, lowercase and a number.</small></label>
-          <p v-if="authMode === 'register'" class="form-message">New accounts are created as community member accounts. Passwords are stored as a salted hash on this device.</p>
+          <p v-if="authMode === 'register'" class="form-message">{{ externalAuthReady ? 'New accounts are created with Firebase Authentication and assigned the community member role.' : 'New accounts are created as community member accounts. Passwords are stored as a salted hash on this device.' }}</p>
           <p v-if="authError" class="form-message error" role="alert">{{ authError }}</p>
           <p v-if="authNotice" class="form-message" role="status">{{ authNotice }}</p>
           <button class="button primary wide" type="submit" :disabled="authPending">{{ authPending ? 'Please wait…' : authMode === 'login' ? 'Sign in securely' : 'Create my account' }}</button>
         </form>
-        <p v-if="authMode === 'login'" class="staff-hint"><strong>Staff demo:</strong> staff@eldercare.org / StaffDemo2026</p>
+        <p v-if="authMode === 'login' && !externalAuthReady" class="staff-hint"><strong>Staff demo:</strong> staff@eldercare.org / StaffDemo2026</p>
+        <p v-if="authMode === 'login' && externalAuthReady" class="staff-hint"><strong>Staff role:</strong> add staff emails to <code>VITE_FIREBASE_STAFF_EMAILS</code>.</p>
       </div>
       <div v-else class="profile-card">
         <span class="profile-icon">{{ activeUser.name.charAt(0) }}</span><h2>{{ activeUser.name }}</h2><p>{{ activeUser.email }}</p>
         <p><span class="tag">{{ activeUser.role === 'admin' ? 'Staff member' : 'Community member' }}</span></p>
+        <p class="profile-provider">{{ activeUser.provider === 'firebase' ? 'Firebase Authentication' : 'Local demo authentication' }}</p>
         <div class="booking-summary">
           <h3>Your activity bookings</h3>
           <p v-if="!myBookings.length">You have no upcoming bookings yet.</p>

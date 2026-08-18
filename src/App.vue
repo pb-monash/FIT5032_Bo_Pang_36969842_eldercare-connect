@@ -1,11 +1,13 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import AccountPanel from './components/AccountPanel.vue'
 import ActivityList from './components/ActivityList.vue'
 import ServiceDirectory from './components/ServiceDirectory.vue'
 import SiteHeader from './components/SiteHeader.vue'
 import StaffDashboard from './components/StaffDashboard.vue'
 import { createPasswordCredential, migrateLegacyAccounts, verifyPassword } from './composables/useSecureAuth'
+import { describeMissingIntegrations, integrationStatus } from './config/a3Integrations'
+import { registerFirebaseMember, signInFirebaseMember, signOutFirebaseMember, subscribeToFirebaseAuth } from './services/firebaseAuth'
 
 const STORAGE_KEY = 'eldercare-connect-v2'
 const LEGACY_STORAGE_KEY = 'eldercare-connect-v1'
@@ -59,6 +61,7 @@ const editingServiceId = ref(null)
 const serviceForm = ref({ name: '', suburb: '', type: 'Health support', distance: '', description: '' })
 const readingOptions = ref({ largeText: false, highContrast: false })
 const isHydrated = ref(false)
+let stopFirebaseAuth = () => {}
 
 const navItems = [
   { id: 'home', label: 'Home' },
@@ -68,6 +71,9 @@ const navItems = [
 ]
 
 const isAdmin = computed(() => activeUser.value?.role === 'admin')
+const externalAuthReady = computed(() => integrationStatus.firebaseAuthReady)
+const authProviderLabel = computed(() => externalAuthReady.value ? 'Firebase Auth' : 'Local demo auth')
+const authProviderStatus = computed(() => externalAuthReady.value ? 'External authentication is ready for A3.' : `${describeMissingIntegrations().includes('Firebase authentication') ? 'Firebase env is not configured yet.' : 'Firebase is unavailable.'} Local demo auth is active for development.`)
 const displayName = computed(() => activeUser.value?.name?.split(' ')[0] || 'there')
 const myBookings = computed(() => bookings.value
   .filter(booking => booking.userId === activeUser.value?.id)
@@ -85,7 +91,21 @@ function readStoredState() {
 }
 
 function sessionUser(account) {
-  return { id: account.id, name: account.name, email: account.email, role: account.role, sessionExpiresAt: Date.now() + SESSION_DURATION_MS }
+  return { id: account.id, name: account.name, email: account.email, role: account.role, provider: account.provider || 'local', sessionExpiresAt: Date.now() + SESSION_DURATION_MS }
+}
+
+function externalSessionUser(account) {
+  return { ...account, sessionExpiresAt: Date.now() + SESSION_DURATION_MS }
+}
+
+function upsertExternalAccount(account) {
+  const existing = users.value.find(user => user.id === account.id || user.email === account.email)
+  if (existing) {
+    Object.assign(existing, account, { provider: 'firebase' })
+    return existing
+  }
+  users.value.push({ ...account, provider: 'firebase' })
+  return account
 }
 
 function saveState() {
@@ -122,6 +142,16 @@ onMounted(async () => {
   const sessionIsValid = savedSession?.sessionExpiresAt && savedSession.sessionExpiresAt > Date.now()
   activeUser.value = sessionAccount && sessionIsValid ? { ...sessionUser(sessionAccount), sessionExpiresAt: savedSession.sessionExpiresAt } : null
   if (savedSession && !sessionIsValid) authNotice.value = 'Your session has expired. Please sign in again.'
+  stopFirebaseAuth = subscribeToFirebaseAuth(account => {
+    if (account) {
+      activeUser.value = externalSessionUser(upsertExternalAccount(account))
+      if (currentPage.value === 'account') authNotice.value = 'Signed in with Firebase Authentication.'
+    } else if (activeUser.value?.provider === 'firebase') {
+      activeUser.value = null
+    }
+  }, () => {
+    authNotice.value = 'Firebase Authentication is configured but could not be reached. Check the Firebase project settings.'
+  })
   localStorage.removeItem(LEGACY_STORAGE_KEY)
   isHydrated.value = true
   saveState()
@@ -130,6 +160,8 @@ onMounted(async () => {
 watch([services, activities, users, bookings, activeUser, readingOptions, loginSecurity], () => {
   if (isHydrated.value) saveState()
 }, { deep: true })
+
+onUnmounted(() => stopFirebaseAuth())
 
 function notify(message) {
   toast.value = message
@@ -192,6 +224,33 @@ function resetLoginSecurity() {
   loginSecurity.value = { failedAttempts: 0, lockedUntil: 0 }
 }
 
+function firebaseAuthMessage(error) {
+  const code = error?.code || ''
+  if (code.includes('email-already-in-use')) return 'A Firebase account already exists with this email.'
+  if (code.includes('weak-password')) return 'Firebase requires a stronger password for this account.'
+  if (code.includes('invalid-credential') || code.includes('wrong-password') || code.includes('user-not-found')) return 'Firebase could not verify those sign-in details.'
+  if (code.includes('network-request-failed')) return 'Firebase could not be reached. Check your network connection.'
+  return 'Firebase Authentication could not complete this request. Please try again.'
+}
+
+async function handleFirebaseAuth(email, password) {
+  if (authMode.value === 'register') {
+    const passwordMessage = passwordError(password)
+    if (passwordMessage) return authError.value = passwordMessage
+    const name = cleanText(authForm.value.name, 50)
+    if (name.length < 2) return authError.value = 'Enter your name (at least 2 characters).'
+    const account = await registerFirebaseMember({ name, email, password })
+    activeUser.value = externalSessionUser(upsertExternalAccount(account))
+    notify(`Welcome to ElderCare Connect, ${name}. Firebase Auth is connected.`)
+  } else {
+    const account = await signInFirebaseMember({ email, password })
+    activeUser.value = externalSessionUser(upsertExternalAccount(account))
+    notify(`Welcome back, ${account.name}. Signed in with Firebase Auth.`)
+  }
+  resetLoginSecurity()
+  currentPage.value = activeUser.value.role === 'admin' ? 'admin' : 'services'
+}
+
 async function handleAuth() {
   if (authPending.value) return
   clearAuthFeedback()
@@ -203,6 +262,11 @@ async function handleAuth() {
 
   authPending.value = true
   try {
+    if (externalAuthReady.value) {
+      await handleFirebaseAuth(email, password)
+      return
+    }
+
     if (authMode.value === 'register') {
       const passwordMessage = passwordError(password)
       if (passwordMessage) return authError.value = passwordMessage
@@ -224,15 +288,21 @@ async function handleAuth() {
     }
     resetLoginSecurity()
     currentPage.value = activeUser.value.role === 'admin' ? 'admin' : 'services'
-  } catch {
-    authError.value = 'We could not complete sign-in securely. Please try again.'
+  } catch (error) {
+    if (externalAuthReady.value) {
+      const message = firebaseAuthMessage(error)
+      authError.value = authMode.value === 'login' ? `${message} ${recordFailedLogin()}` : message
+    } else {
+      authError.value = 'We could not complete sign-in securely. Please try again.'
+    }
   } finally {
     authForm.value = { ...authForm.value, password: '' }
     authPending.value = false
   }
 }
 
-function logOut() {
+async function logOut() {
+  if (activeUser.value?.provider === 'firebase') await signOutFirebaseMember()
   activeUser.value = null
   currentPage.value = 'home'
   authForm.value = { name: '', email: '', password: '' }
@@ -380,6 +450,9 @@ function removeDraftService(service) {
       :auth-error="authError"
       :auth-notice="authNotice"
       :auth-pending="authPending"
+      :auth-provider-label="authProviderLabel"
+      :auth-provider-status="authProviderStatus"
+      :external-auth-ready="externalAuthReady"
       :display-name="displayName"
       :is-admin="isAdmin"
       :my-bookings="myBookings"

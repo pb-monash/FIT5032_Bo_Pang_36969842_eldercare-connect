@@ -22,6 +22,11 @@ export const firebaseConfig = {
 
 export const cloudFunctionsBaseUrl = readEnvValue('VITE_CLOUD_FUNCTIONS_BASE_URL')
 
+export const staffEmails = readEnvValue('VITE_FIREBASE_STAFF_EMAILS')
+  .split(',')
+  .map(email => email.trim().toLowerCase())
+  .filter(Boolean)
+
 export const mapConfig = {
   provider: readEnvValue('VITE_MAP_PROVIDER') || 'maptiler',
   apiKey: readEnvValue('VITE_MAP_API_KEY'),
