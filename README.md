@@ -1,6 +1,6 @@
 # ElderCare Connect
 
-FIT5032 A2 Basic Web App - Bo Pang (36969842)
+FIT5032 A2 Basic Web App and A3 Advanced Web App - Bo Pang (36969842)
 
 ElderCare Connect is a Vue 3 web application for a health charity supporting older adults. It helps community members find nearby support, book activities, rate services, and access simple wellbeing resources.
 
@@ -19,6 +19,8 @@ Open the local address printed by Vite (normally `http://localhost:5173`). To cr
 pnpm build
 ```
 
+For A3 external integrations, copy `.env.example` to `.env.local` and fill in only the services being tested locally. Do not commit `.env.local` or provider secrets.
+
 ## A2 feature checklist
 
 | Requirement | Implementation |
@@ -31,6 +33,20 @@ pnpm build
 | C.2 Role access | Community members cannot access the staff hub. The staff account has a protected management dashboard. |
 | C.3 Rating | Members can rate a service once, update their own rating and see the aggregated average. |
 | C.4 Security | User text is length limited and sanitised before storage; content is rendered through Vue interpolation rather than raw HTML. |
+
+## A3 target checklist
+
+| Requirement | Planned implementation |
+| --- | --- |
+| D.1 External Authentication | Firebase Authentication with a clear member/staff login flow. |
+| D.2 Email | Serverless email workflow through a provider such as SendGrid or Brevo, with compose and attachment support. |
+| D.3 Interactive Table Data | Two staff-facing data tables with sorting, global search, column search and 10-row pagination. |
+| D.4 Deployment to the Cloud | Public cloud deployment after the advanced features are complete. |
+| E.1 Cloud Functions | Serverless functions for email, exports and privileged actions. |
+| E.2 Geo Location | Map-based service discovery with place search and route/trip information. |
+| E.3 Accessibility | WCAG 2.1 AA-oriented keyboard, contrast, labels and text alternative checks. |
+| E.4 Export | CSV and PDF exports for selected operational data. |
+| F.1 Innovation | Calendar-constrained booking, bulk email, analytics charts and an enhanced admin dashboard. |
 
 ## Demo staff account
 
@@ -49,4 +65,3 @@ New registrations are always community-member accounts. Staff access is assigned
 4. Book and cancel an activity; refresh the page to show Local Storage persistence.
 5. Sign in with the staff demo account, open **Staff hub**, edit a service and add/remove a draft service.
 6. Use the **A+** and **Contrast** controls in the header, then refresh to demonstrate accessible reading preferences.
-
