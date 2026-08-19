@@ -39,6 +39,35 @@ const seedActivities = [
   { id: 3, title: 'Using your smartphone safely', date: 'Friday, 11:00 am', seats: 10, category: 'Learning' },
 ]
 
+const seedMembers = [
+  { id: 'demo-member-1', name: 'Grace Chen', email: 'grace.chen@example.com', role: 'member', provider: 'demo' },
+  { id: 'demo-member-2', name: 'Noah Williams', email: 'noah.williams@example.com', role: 'member', provider: 'demo' },
+  { id: 'demo-member-3', name: 'Asha Patel', email: 'asha.patel@example.com', role: 'member', provider: 'demo' },
+  { id: 'demo-member-4', name: 'Liam Brown', email: 'liam.brown@example.com', role: 'member', provider: 'demo' },
+  { id: 'demo-member-5', name: 'Mei Lin', email: 'mei.lin@example.com', role: 'member', provider: 'demo' },
+  { id: 'demo-member-6', name: 'Oliver Smith', email: 'oliver.smith@example.com', role: 'member', provider: 'demo' },
+  { id: 'demo-member-7', name: 'Fatima Khan', email: 'fatima.khan@example.com', role: 'member', provider: 'demo' },
+  { id: 'demo-member-8', name: 'Ethan Nguyen', email: 'ethan.nguyen@example.com', role: 'member', provider: 'demo' },
+  { id: 'demo-member-9', name: 'Sofia Garcia', email: 'sofia.garcia@example.com', role: 'member', provider: 'demo' },
+  { id: 'demo-member-10', name: 'Henry Wilson', email: 'henry.wilson@example.com', role: 'member', provider: 'demo' },
+  { id: 'demo-member-11', name: 'Mina Osei', email: 'mina.osei@example.com', role: 'member', provider: 'demo' },
+]
+
+const seedBookings = [
+  { id: 'demo-booking-1', activityId: 1, userId: 'demo-member-1', status: 'Confirmed', createdAt: '2026-08-12' },
+  { id: 'demo-booking-2', activityId: 2, userId: 'demo-member-2', status: 'Confirmed', createdAt: '2026-08-12' },
+  { id: 'demo-booking-3', activityId: 3, userId: 'demo-member-3', status: 'Waitlist', createdAt: '2026-08-13' },
+  { id: 'demo-booking-4', activityId: 1, userId: 'demo-member-4', status: 'Confirmed', createdAt: '2026-08-13' },
+  { id: 'demo-booking-5', activityId: 2, userId: 'demo-member-5', status: 'Confirmed', createdAt: '2026-08-14' },
+  { id: 'demo-booking-6', activityId: 3, userId: 'demo-member-6', status: 'Confirmed', createdAt: '2026-08-14' },
+  { id: 'demo-booking-7', activityId: 1, userId: 'demo-member-7', status: 'Waitlist', createdAt: '2026-08-15' },
+  { id: 'demo-booking-8', activityId: 2, userId: 'demo-member-8', status: 'Confirmed', createdAt: '2026-08-15' },
+  { id: 'demo-booking-9', activityId: 3, userId: 'demo-member-9', status: 'Cancelled', createdAt: '2026-08-16' },
+  { id: 'demo-booking-10', activityId: 1, userId: 'demo-member-10', status: 'Confirmed', createdAt: '2026-08-16' },
+  { id: 'demo-booking-11', activityId: 2, userId: 'demo-member-11', status: 'Confirmed', createdAt: '2026-08-17' },
+  { id: 'demo-booking-12', activityId: 3, userId: 'demo-member-1', status: 'Confirmed', createdAt: '2026-08-17' },
+]
+
 const currentPage = ref('home')
 const showMenu = ref(false)
 const activeUser = ref(null)
@@ -136,6 +165,10 @@ onMounted(async () => {
 
   users.value = await migrateLegacyAccounts(users.value)
   if (!users.value.some(user => user.email === STAFF_ACCOUNT.email)) users.value.push({ ...STAFF_ACCOUNT })
+  const userIds = new Set(users.value.map(user => user.id))
+  users.value = [...users.value, ...seedMembers.filter(user => !userIds.has(user.id))]
+  const bookingIds = new Set(bookings.value.map(booking => booking.id))
+  bookings.value = [...bookings.value, ...seedBookings.filter(booking => !bookingIds.has(booking.id))]
 
   const savedSession = saved?.activeUser
   const sessionAccount = users.value.find(user => user.id === savedSession?.id)
@@ -469,6 +502,7 @@ function removeDraftService(service) {
       :bookings="bookings"
       :editor-error="editorError"
       :editing-service-id="editingServiceId"
+      :activities="activities"
       :services="services"
       :users="users"
       @add-service="addService"
