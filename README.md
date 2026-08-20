@@ -48,6 +48,11 @@ For A3 external integrations, copy `.env.example` to `.env.local` and fill in on
 | E.4 Export | CSV and PDF exports for selected operational data. |
 | F.1 Innovation | Calendar-constrained booking, bulk email, analytics charts and an enhanced admin dashboard. |
 
+
+## A3 cloud function scaffold
+
+The `functions/email-worker.js` file provides a safe Cloudflare Worker-style endpoint for D.2/E.1 development. It validates email requests, recipients, and attachment metadata, then returns a queued preview result. It does not send external email until a real provider integration is deliberately added with platform secrets and tutor-approved deployment settings.
+
 ## Demo staff account
 
 Use this account to demonstrate staff-only access and service management:

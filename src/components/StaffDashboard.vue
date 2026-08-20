@@ -1,5 +1,6 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
+import { createTextAttachment, queueCareEmail } from '../services/cloudEmail'
 
 const props = defineProps({
   activities: { type: Array, required: true },
@@ -22,6 +23,14 @@ const bookingSort = ref({ key: 'createdAt', direction: 'desc' })
 const memberSort = ref({ key: 'name', direction: 'asc' })
 const bookingFilters = reactive({ member: '', activity: '', date: '', status: '', provider: '' })
 const memberFilters = reactive({ name: '', email: '', role: '', provider: '', bookingCount: '' })
+const emailStatus = ref({ type: '', message: '' })
+const emailPending = ref(false)
+const emailGroup = ref('members')
+const emailForm = reactive({
+  subject: 'Upcoming ElderCare Connect activity update',
+  body: 'Hello,\n\nHere is a quick update from ElderCare Connect about upcoming community support and activity bookings. Please contact the staff team if you need help changing a booking.\n\nWarm regards,\nElderCare Connect staff',
+  includeAttachment: true,
+})
 
 const bookingColumns = [
   { key: 'member', label: 'Member' },
@@ -130,6 +139,35 @@ const visibleMemberRows = computed(() => paginateRows(filteredMemberRows.value, 
 
 watch([bookingSearch, () => ({ ...bookingFilters })], () => { bookingPage.value = 1 })
 watch([memberSearch, () => ({ ...memberFilters })], () => { memberPage.value = 1 })
+
+const memberRecipients = computed(() => props.users.filter(user => user.role !== 'admin'))
+const bookedMemberIds = computed(() => new Set(props.bookings.filter(booking => booking.status !== 'Cancelled').map(booking => booking.userId)))
+const bookedRecipients = computed(() => memberRecipients.value.filter(user => bookedMemberIds.value.has(user.id)))
+const emailRecipients = computed(() => (emailGroup.value === 'booked' ? bookedRecipients.value : memberRecipients.value))
+const emailRecipientEmails = computed(() => emailRecipients.value.map(user => user.email))
+const bookingAttachment = computed(() => createTextAttachment('booking-summary.txt', bookingRows.value.map(row => `${row.member} | ${row.activity} | ${row.date} | ${row.status}`)))
+
+async function queueStaffEmail() {
+  if (emailPending.value) return
+  emailStatus.value = { type: '', message: '' }
+  emailPending.value = true
+  try {
+    const result = await queueCareEmail({
+      recipients: emailRecipientEmails.value,
+      subject: emailForm.subject,
+      body: emailForm.body,
+      attachments: emailForm.includeAttachment ? [bookingAttachment.value] : [],
+    })
+    emailStatus.value = {
+      type: 'success',
+      message: `Email request ${result.messageId} queued for ${result.acceptedRecipients} recipient${result.acceptedRecipients === 1 ? '' : 's'} in ${result.mode} mode.`,
+    }
+  } catch (error) {
+    emailStatus.value = { type: 'error', message: error.message || 'Email request could not be queued.' }
+  } finally {
+    emailPending.value = false
+  }
+}
 </script>
 
 <template>
@@ -182,6 +220,19 @@ watch([memberSearch, () => ({ ...memberFilters })], () => { memberPage.value = 1
           </table>
         </div>
         <div class="pagination-bar"><button type="button" class="button secondary" :disabled="memberPage <= 1" @click="memberPage -= 1">Previous</button><span>Page {{ Math.min(memberPage, memberPageCount) }} of {{ memberPageCount }} - 10 rows per page</span><button type="button" class="button secondary" :disabled="memberPage >= memberPageCount" @click="memberPage += 1">Next</button></div>
+      </section>
+
+      <section class="email-panel" aria-labelledby="email-panel-title">
+        <div class="table-heading"><div><p class="eyebrow">Cloud email</p><h2 id="email-panel-title">Staff email composer</h2></div><p>{{ emailRecipientEmails.length }} selected recipients</p></div>
+        <div class="email-grid">
+          <label>Recipient group<select v-model="emailGroup"><option value="members">All community members</option><option value="booked">Members with active bookings</option></select></label>
+          <label>Email subject<input v-model="emailForm.subject" maxlength="140" /></label>
+        </div>
+        <label>Message body<textarea v-model="emailForm.body" rows="6" maxlength="1200"></textarea></label>
+        <label class="checkbox-line"><input v-model="emailForm.includeAttachment" type="checkbox" /> Attach booking summary text file</label>
+        <div class="recipient-preview" aria-label="Selected email recipients"><span v-for="email in emailRecipientEmails.slice(0, 6)" :key="email">{{ email }}</span><span v-if="emailRecipientEmails.length > 6">+{{ emailRecipientEmails.length - 6 }} more</span></div>
+        <p v-if="emailStatus.message" class="form-message" :class="{ error: emailStatus.type === 'error' }" role="status">{{ emailStatus.message }}</p>
+        <button type="button" class="button primary" :disabled="emailPending" @click="queueStaffEmail">{{ emailPending ? 'Queueing request...' : 'Queue email request' }}</button>
       </section>
 
       <div class="admin-panel"><div><h2>Service directory</h2><p>Maintain the information members see when searching for help.</p></div><button class="button primary" @click="$emit('add-service')">Add service</button></div>
