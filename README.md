@@ -49,6 +49,15 @@ For A3 external integrations, copy `.env.example` to `.env.local` and fill in on
 | F.1 Innovation | Calendar-constrained booking, bulk email, analytics charts and an enhanced admin dashboard. |
 
 
+
+## A3 cloud deployment
+
+The app is configured for GitHub Pages deployment through `.github/workflows/deploy.yml`. The expected public URL is:
+
+`https://pb-monash.github.io/FIT5032_Bo_Pang_36969842_eldercare-connect/`
+
+GitHub repository settings must use **Pages > Build and deployment > Source: GitHub Actions** for the workflow deployment to publish successfully.
+
 ## A3 cloud function scaffold
 
 The `functions/email-worker.js` file provides a safe Cloudflare Worker-style endpoint for D.2/E.1 development. It validates email requests, recipients, and attachment metadata, then returns a queued preview result. It does not send external email until a real provider integration is deliberately added with platform secrets and tutor-approved deployment settings.
