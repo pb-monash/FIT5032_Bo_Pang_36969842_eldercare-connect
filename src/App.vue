@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import AccountPanel from './components/AccountPanel.vue'
 import ActivityList from './components/ActivityList.vue'
 import ServiceDirectory from './components/ServiceDirectory.vue'
+import ServiceMap from './components/ServiceMap.vue'
 import SiteHeader from './components/SiteHeader.vue'
 import StaffDashboard from './components/StaffDashboard.vue'
 import { createPasswordCredential, migrateLegacyAccounts, verifyPassword } from './composables/useSecureAuth'
@@ -25,18 +26,18 @@ const STAFF_ACCOUNT = {
 }
 
 const seedServices = [
-  { id: 1, name: 'Harbour Wellbeing Hub', suburb: 'Clayton', type: 'Social connection', distance: '1.2 km', description: 'Friendly weekday gatherings, light exercise and a community lunch.', ratings: [5, 4, 5, 4] },
-  { id: 2, name: 'Gentle Steps Physio', suburb: 'Oakleigh', type: 'Health support', distance: '3.8 km', description: 'Mobility consultations and small guided movement sessions.', ratings: [5, 4, 4] },
-  { id: 3, name: 'Digital Confidence Club', suburb: 'Chadstone', type: 'Learning', distance: '5.1 km', description: 'Patient one-to-one help with phones, video calls and online safety.', ratings: [4, 5, 5, 4, 5] },
-  { id: 4, name: 'Home Safety Check-in', suburb: 'Clayton', type: 'Health support', distance: '2.0 km', description: 'Practical home-safety visits and wellbeing check-ins for older adults.', ratings: [5, 5, 4, 5, 5] },
-  { id: 5, name: 'Neighbourhood Garden Club', suburb: 'Hughesdale', type: 'Social connection', distance: '4.3 km', description: 'Gentle gardening, tea and friendly conversation in an accessible community garden.', ratings: [4, 4, 5, 4] },
-  { id: 6, name: 'Everyday Tech Workshop', suburb: 'Oakleigh', type: 'Learning', distance: '3.1 km', description: 'Small group lessons for online appointments, transport apps and staying safe online.', ratings: [3, 4, 4, 5] },
+  { id: 1, name: 'Harbour Wellbeing Hub', suburb: 'Clayton', type: 'Social connection', distance: '1.2 km', coordinates: { lat: -37.9155, lng: 145.1301 }, mapPosition: { x: 47, y: 54 }, description: 'Friendly weekday gatherings, light exercise and a community lunch.', ratings: [5, 4, 5, 4] },
+  { id: 2, name: 'Gentle Steps Physio', suburb: 'Oakleigh', type: 'Health support', distance: '3.8 km', coordinates: { lat: -37.8998, lng: 145.0886 }, mapPosition: { x: 23, y: 42 }, description: 'Mobility consultations and small guided movement sessions.', ratings: [5, 4, 4] },
+  { id: 3, name: 'Digital Confidence Club', suburb: 'Chadstone', type: 'Learning', distance: '5.1 km', coordinates: { lat: -37.8876, lng: 145.0826 }, mapPosition: { x: 18, y: 24 }, description: 'Patient one-to-one help with phones, video calls and online safety.', ratings: [4, 5, 5, 4, 5] },
+  { id: 4, name: 'Home Safety Check-in', suburb: 'Clayton', type: 'Health support', distance: '2.0 km', coordinates: { lat: -37.9271, lng: 145.1199 }, mapPosition: { x: 38, y: 72 }, description: 'Practical home-safety visits and wellbeing check-ins for older adults.', ratings: [5, 5, 4, 5, 5] },
+  { id: 5, name: 'Neighbourhood Garden Club', suburb: 'Hughesdale', type: 'Social connection', distance: '4.3 km', coordinates: { lat: -37.9003, lng: 145.0754 }, mapPosition: { x: 12, y: 49 }, description: 'Gentle gardening, tea and friendly conversation in an accessible community garden.', ratings: [4, 4, 5, 4] },
+  { id: 6, name: 'Everyday Tech Workshop', suburb: 'Oakleigh', type: 'Learning', distance: '3.1 km', coordinates: { lat: -37.9054, lng: 145.1032 }, mapPosition: { x: 31, y: 50 }, description: 'Small group lessons for online appointments, transport apps and staying safe online.', ratings: [3, 4, 4, 5] },
 ]
 
 const seedActivities = [
-  { id: 1, title: 'Morning tea & conversation', date: 'Tuesday, 10:30 am', seats: 8, category: 'Community' },
-  { id: 2, title: 'Gentle balance class', date: 'Wednesday, 2:00 pm', seats: 4, category: 'Wellbeing' },
-  { id: 3, title: 'Using your smartphone safely', date: 'Friday, 11:00 am', seats: 10, category: 'Learning' },
+  { id: 1, title: 'Morning tea & conversation', date: 'Tuesday, 25 Aug 2026, 10:30 am', seats: 8, maxSeats: 12, category: 'Community', startAt: '2026-08-25T10:30:00+10:00', bookingCutoff: '2026-08-24T10:30:00+10:00' },
+  { id: 2, title: 'Gentle balance class', date: 'Wednesday, 26 Aug 2026, 2:00 pm', seats: 4, maxSeats: 8, category: 'Wellbeing', startAt: '2026-08-26T14:00:00+10:00', bookingCutoff: '2026-08-25T14:00:00+10:00' },
+  { id: 3, title: 'Using your smartphone safely', date: 'Friday, 28 Aug 2026, 11:00 am', seats: 10, maxSeats: 14, category: 'Learning', startAt: '2026-08-28T11:00:00+10:00', bookingCutoff: '2026-08-27T11:00:00+10:00' },
 ]
 
 const seedMembers = [
@@ -95,6 +96,7 @@ let stopFirebaseAuth = () => {}
 const navItems = [
   { id: 'home', label: 'Home' },
   { id: 'services', label: 'Find support' },
+  { id: 'map', label: 'Map' },
   { id: 'activities', label: 'Activities' },
   { id: 'resources', label: 'Resources' },
 ]
@@ -161,7 +163,9 @@ onMounted(async () => {
   }
 
   const savedServiceIds = new Set(services.value.map(service => service.id))
+  services.value = services.value.map(service => ({ ...seedServices.find(seed => seed.id === service.id), ...service }))
   services.value = [...services.value, ...seedServices.filter(service => !savedServiceIds.has(service.id))]
+  activities.value = activities.value.map(activity => ({ ...seedActivities.find(seed => seed.id === activity.id), ...activity }))
 
   users.value = await migrateLegacyAccounts(users.value)
   if (!users.value.some(user => user.email === STAFF_ACCOUNT.email)) users.value.push({ ...STAFF_ACCOUNT })
@@ -353,6 +357,10 @@ function addRating(service, rating) {
   notify(`Your ${rating}-star rating for ${service.name} has been saved.`)
 }
 
+function bookingClosed(activity) {
+  return activity.bookingCutoff && Date.now() > new Date(activity.bookingCutoff).getTime()
+}
+
 function bookActivity(activity) {
   if (!activeUser.value) {
     authNotice.value = 'Sign in to book an activity.'
@@ -360,6 +368,7 @@ function bookActivity(activity) {
     return
   }
   if (activity.seats < 1) return notify('This activity is fully booked.')
+  if (bookingClosed(activity)) return notify('Booking has closed for this activity.')
   if (bookings.value.some(booking => booking.activityId === activity.id && booking.userId === activeUser.value.id)) return notify('You have already booked this activity.')
   bookings.value.push({ id: crypto.randomUUID(), activityId: activity.id, userId: activeUser.value.id })
   activity.seats -= 1
@@ -468,6 +477,8 @@ function removeDraftService(service) {
       :services="services"
       @rate="addRating"
     />
+
+    <ServiceMap v-if="currentPage === 'map'" :services="services" />
 
     <ActivityList v-if="currentPage === 'activities'" :activities="activities" @book="bookActivity" />
 

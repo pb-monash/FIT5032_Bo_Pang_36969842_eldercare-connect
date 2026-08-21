@@ -1,6 +1,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { createTextAttachment, queueCareEmail } from '../services/cloudEmail'
+import { downloadCsv, downloadPdf } from '../services/exportTools'
 
 const props = defineProps({
   activities: { type: Array, required: true },
@@ -147,6 +148,31 @@ const emailRecipients = computed(() => (emailGroup.value === 'booked' ? bookedRe
 const emailRecipientEmails = computed(() => emailRecipients.value.map(user => user.email))
 const bookingAttachment = computed(() => createTextAttachment('booking-summary.txt', bookingRows.value.map(row => `${row.member} | ${row.activity} | ${row.date} | ${row.status}`)))
 
+const serviceExportRows = computed(() => props.services.map(service => ({
+  name: service.name,
+  suburb: service.suburb,
+  type: service.type,
+  distance: service.distance,
+  ratingCount: [...(service.ratings || []), ...Object.values(service.userRatings || {})].length,
+})))
+
+const bookingStatusChart = computed(() => {
+  const counts = filteredBookingRows.value.reduce((summary, row) => ({ ...summary, [row.status]: (summary[row.status] || 0) + 1 }), {})
+  const max = Math.max(1, ...Object.values(counts))
+  return Object.entries(counts).map(([label, value]) => ({ label, value, width: Math.round((value / max) * 100) }))
+})
+
+const serviceTypeChart = computed(() => {
+  const counts = props.services.reduce((summary, service) => ({ ...summary, [service.type]: (summary[service.type] || 0) + 1 }), {})
+  const max = Math.max(1, ...Object.values(counts))
+  return Object.entries(counts).map(([label, value]) => ({ label, value, width: Math.round((value / max) * 100) }))
+})
+
+function exportBookingsCsv() { downloadCsv('eldercare-bookings.csv', filteredBookingRows.value) }
+function exportBookingsPdf() { downloadPdf('eldercare-bookings.pdf', 'ElderCare Booking Export', filteredBookingRows.value) }
+function exportMembersCsv() { downloadCsv('eldercare-members.csv', filteredMemberRows.value) }
+function exportServicesPdf() { downloadPdf('eldercare-services.pdf', 'ElderCare Service Export', serviceExportRows.value) }
+
 async function queueStaffEmail() {
   if (emailPending.value) return
   emailStatus.value = { type: '', message: '' }
@@ -220,6 +246,15 @@ async function queueStaffEmail() {
           </table>
         </div>
         <div class="pagination-bar"><button type="button" class="button secondary" :disabled="memberPage <= 1" @click="memberPage -= 1">Previous</button><span>Page {{ Math.min(memberPage, memberPageCount) }} of {{ memberPageCount }} - 10 rows per page</span><button type="button" class="button secondary" :disabled="memberPage >= memberPageCount" @click="memberPage += 1">Next</button></div>
+      </section>
+
+      <section class="insight-panel" aria-labelledby="insight-title">
+        <div class="table-heading"><div><p class="eyebrow">Export and analytics</p><h2 id="insight-title">Care coordination insights</h2></div><p>CSV and PDF exports for A3</p></div>
+        <div class="export-actions"><button type="button" class="button secondary" @click="exportBookingsCsv">Export bookings CSV</button><button type="button" class="button secondary" @click="exportBookingsPdf">Export bookings PDF</button><button type="button" class="button secondary" @click="exportMembersCsv">Export members CSV</button><button type="button" class="button secondary" @click="exportServicesPdf">Export services PDF</button></div>
+        <div class="chart-grid">
+          <article><h3>Booking status</h3><div v-for="item in bookingStatusChart" :key="item.label" class="chart-row"><span>{{ item.label }}</span><div><i :style="{ width: `${item.width}%` }"></i></div><strong>{{ item.value }}</strong></div></article>
+          <article><h3>Service mix</h3><div v-for="item in serviceTypeChart" :key="item.label" class="chart-row"><span>{{ item.label }}</span><div><i :style="{ width: `${item.width}%` }"></i></div><strong>{{ item.value }}</strong></div></article>
+        </div>
       </section>
 
       <section class="email-panel" aria-labelledby="email-panel-title">
