@@ -8,10 +8,6 @@
     ],
     "rewrites": [
       {
-        "source": "/api/email/queue",
-        "function": "queueEmail"
-      },
-      {
         "source": "**",
         "destination": "/index.html"
       }

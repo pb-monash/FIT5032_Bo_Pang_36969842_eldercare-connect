@@ -13,11 +13,6 @@ function hasAll(values) {
   return values.every(Boolean)
 }
 
-function productionOrigin() {
-  if (!import.meta.env.PROD || typeof window === 'undefined') return ''
-  return window.location.origin
-}
-
 export const firebaseConfig = {
   apiKey: readEnvValue('VITE_FIREBASE_API_KEY'),
   authDomain: readEnvValue('VITE_FIREBASE_AUTH_DOMAIN'),
@@ -25,7 +20,7 @@ export const firebaseConfig = {
   appId: readEnvValue('VITE_FIREBASE_APP_ID'),
 }
 
-export const cloudFunctionsBaseUrl = readEnvValue('VITE_CLOUD_FUNCTIONS_BASE_URL') || productionOrigin()
+export const cloudFunctionsBaseUrl = readEnvValue('VITE_CLOUD_FUNCTIONS_BASE_URL')
 
 export const staffEmails = readEnvValue('VITE_FIREBASE_STAFF_EMAILS')
   .split(',')
@@ -46,7 +41,7 @@ export const integrationStatus = {
 export function describeMissingIntegrations() {
   const missing = []
   if (!integrationStatus.firebaseAuthReady) missing.push('Firebase authentication')
-  if (!integrationStatus.cloudFunctionsReady) missing.push('Cloud Functions API')
+  if (!integrationStatus.cloudFunctionsReady) missing.push('serverless email API')
   if (!integrationStatus.mapReady) missing.push('map provider')
   return missing
 }

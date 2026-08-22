@@ -1,5 +1,5 @@
 const corsHeaders = origin => ({
-  'Access-Control-Allow-Origin': origin || 'https://example.invalid',
+  'Access-Control-Allow-Origin': origin || '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   Vary: 'Origin',
@@ -27,7 +27,7 @@ function normaliseAttachments(attachments) {
     .map(attachment => ({
       filename: cleanText(attachment.filename, 120) || 'attachment.txt',
       type: cleanText(attachment.type, 120) || 'text/plain',
-      content: String(attachment.content || '').slice(0, 12000),
+      content: String(attachment.content || attachment.contentBase64 || '').slice(0, 800000),
     }))
     .filter(attachment => attachment.content)
     .slice(0, 3)
@@ -50,6 +50,40 @@ function requestAuthorised(request, env) {
   return Boolean(expected) && provided === `Bearer ${expected}`
 }
 
+async function sendWithBrevo(message, env) {
+  if (!env.BREVO_API_KEY || !env.BREVO_SENDER_EMAIL) return null
+
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'api-key': env.BREVO_API_KEY,
+    },
+    body: JSON.stringify({
+      sender: {
+        email: env.BREVO_SENDER_EMAIL,
+        name: env.BREVO_SENDER_NAME || 'ElderCare Connect',
+      },
+      to: message.recipients.map(email => ({ email })),
+      subject: message.subject,
+      textContent: message.body,
+      attachment: message.attachments.map(attachment => ({
+        name: attachment.filename,
+        content: attachment.content,
+      })),
+    }),
+  })
+
+  const result = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(result.message || 'Brevo email delivery failed.')
+
+  return {
+    provider: 'brevo',
+    messageId: result.messageId || `brevo-${Date.now()}`,
+  }
+}
+
 async function handleQueueEmail(request, env, origin) {
   if (!requestAuthorised(request, env)) return jsonResponse({ error: 'Unauthorised email function request.' }, 401, origin)
   const payload = await request.json()
@@ -64,13 +98,19 @@ async function handleQueueEmail(request, env, origin) {
   if (message.subject.length < 3) return jsonResponse({ error: 'Email subject is too short.' }, 400, origin)
   if (message.body.length < 10) return jsonResponse({ error: 'Email body is too short.' }, 400, origin)
 
+  const delivery = await sendWithBrevo(message, env) || {
+    provider: 'cloudflare-preview',
+    messageId: `preview-${Date.now()}`,
+  }
+
   return jsonResponse({
     ok: true,
-    mode: 'queued-preview',
-    messageId: `eldercare-${Date.now()}`,
+    mode: delivery.provider === 'brevo' ? 'delivered' : 'cloudflare-worker-preview',
+    provider: delivery.provider,
+    messageId: delivery.messageId,
     acceptedRecipients: message.recipients.length,
     attachmentNames: message.attachments.map(attachment => attachment.filename),
-  }, 202, origin)
+  }, delivery.provider === 'brevo' ? 200 : 202, origin)
 }
 
 export default {

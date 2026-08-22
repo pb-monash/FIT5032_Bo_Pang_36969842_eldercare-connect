@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "firebase:emulators": "pnpm build && firebase emulators:start --only hosting,functions",
-    "firebase:deploy": "pnpm build && firebase deploy --only hosting,functions"
+    "firebase:deploy": "pnpm build && firebase deploy --only hosting",
+    "worker:check": "wrangler deploy --dry-run --outdir .wrangler-build",
+    "worker:deploy": "wrangler deploy"
   },
   "dependencies": {
     "firebase": "^12.17.1",
@@ -18,6 +20,7 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.1",
     "firebase-tools": "^15.28.1",
+    "wrangler": "^4.56.0",
     "vite": "^6.1.0"
   },
   "packageManager": "pnpm@11.19.0"

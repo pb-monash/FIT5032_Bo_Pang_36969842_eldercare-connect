@@ -1,0 +1,8 @@
+name = "eldercare-connect-email"
+main = "functions/email-worker.js"
+compatibility_date = "2026-08-22"
+
+[vars]
+ALLOWED_ORIGINS = "https://eldercare-connect-36969842.web.app,https://pb-monash.github.io"
+REQUIRE_FUNCTION_TOKEN = "false"
+BREVO_SENDER_NAME = "ElderCare Connect"

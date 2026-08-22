@@ -52,19 +52,21 @@ For A3 external integrations, copy `.env.example` to `.env.local` and fill in on
 
 ## A3 cloud deployment
 
-The repository still includes the GitHub Pages workflow used for the static A3 checkpoint, but the Exceeds-level cloud path is Firebase Hosting + Firebase Functions:
+The repository still includes the GitHub Pages workflow used for the static A3 checkpoint, but the free A3 cloud path is Firebase Hosting + Firebase Authentication + Cloudflare Workers:
 
 - Firebase Hosting serves the Vue production bundle from `dist`.
-- Firebase Hosting rewrites `/api/email/queue` to the `queueEmail` Firebase Function.
 - Firebase Authentication is enabled from the front-end through the `VITE_FIREBASE_*` environment variables.
-- The email function supports Brevo or SendGrid secrets for real delivery with text attachments. Without provider secrets it still runs in `firebase-cloud-preview` mode, which is useful for safe demonstrations.
+- Cloudflare Workers provides the deployed serverless `/api/email/queue` endpoint without requiring Firebase Blaze.
+- The Worker supports Brevo secrets for real delivery with text attachments. Without Brevo secrets it still runs in `cloudflare-worker-preview` mode, which is useful for safe serverless checks.
 
 Current Firebase project:
 
 - Project ID: `eldercare-connect-36969842`
 - Hosting URL: `https://eldercare-connect-36969842.web.app`
 - Email/password Firebase Authentication is configured through `firebase.json` and deployed with `firebase deploy --only auth`.
-- Firebase Functions code is ready in `functions/index.js`, but deploying Functions requires upgrading the Firebase project to the Blaze plan.
+- Firebase Functions are not required for the free deployment, because Cloudflare Workers handles the serverless email endpoint.
+- Worker name: `eldercare-connect-email`
+- Worker URL: `https://eldercare-connect-email.1830068004g.workers.dev`
 
 ### Firebase setup
 
@@ -78,6 +80,7 @@ VITE_FIREBASE_AUTH_DOMAIN=...
 VITE_FIREBASE_PROJECT_ID=...
 VITE_FIREBASE_APP_ID=...
 VITE_FIREBASE_STAFF_EMAILS=staff@eldercare.org
+VITE_CLOUD_FUNCTIONS_BASE_URL=https://eldercare-connect-email.<your-workers-subdomain>.workers.dev
 ```
 
 4. Install Firebase CLI if needed:
@@ -87,33 +90,57 @@ npm install -g firebase-tools
 firebase login
 ```
 
-5. Set at least one email provider for real D.2 delivery:
-
-```bash
-firebase functions:secrets:set BREVO_API_KEY
-firebase functions:secrets:set BREVO_SENDER_EMAIL
-firebase functions:secrets:set BREVO_SENDER_NAME
-```
-
-or use the `SENDGRID_API_KEY`, `SENDGRID_SENDER_EMAIL`, and `SENDGRID_SENDER_NAME` equivalents.
-
-6. Build and deploy:
+5. Deploy Firebase Hosting and Authentication:
 
 ```bash
 pnpm install
-pnpm --dir functions install
-pnpm firebase:deploy
+pnpm build
+firebase deploy --only hosting,auth
+```
+
+### Cloudflare Worker + Brevo setup
+
+1. Log in to Cloudflare Wrangler:
+
+```bash
+pnpm exec wrangler login
+```
+
+2. Set Brevo secrets on Cloudflare for real D.2 email delivery:
+
+```bash
+pnpm exec wrangler secret put BREVO_API_KEY
+pnpm exec wrangler secret put BREVO_SENDER_EMAIL
+```
+
+Optional:
+
+```bash
+pnpm exec wrangler secret put BREVO_SENDER_NAME
+```
+
+3. Deploy the Worker:
+
+```bash
+pnpm worker:deploy
+```
+
+4. Copy the deployed `workers.dev` URL into `VITE_CLOUD_FUNCTIONS_BASE_URL` and rebuild/redeploy Firebase Hosting:
+
+```bash
+pnpm build
+pnpm exec firebase deploy --only hosting
 ```
 
 After deployment, verify:
 
 - the Firebase Hosting URL opens the app;
 - account registration/sign-in shows Firebase Authentication;
-- Staff hub email composer returns `delivered` when provider secrets are set, or `firebase-cloud-preview` when only the cloud function is configured.
+- Staff hub email composer returns `delivered` when Brevo secrets are set, or `cloudflare-worker-preview` before the Brevo secrets are added.
 
 ## A3 cloud function notes
 
-The legacy `functions/email-worker.js` file is retained as a Cloudflare Worker reference from the earlier scaffold. The deployed Firebase Functions entry point is `functions/index.js`.
+The free deployed serverless entry point is `functions/email-worker.js`, configured by `wrangler.toml`. The Firebase Functions entry point in `functions/index.js` is retained as an optional Blaze-only alternative and is not required for the free A3 deployment.
 
 ## Demo staff account
 
