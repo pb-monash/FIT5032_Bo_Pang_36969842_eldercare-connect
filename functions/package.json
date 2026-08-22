@@ -1,0 +1,17 @@
+{
+  "name": "eldercare-connect-functions",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "22"
+  },
+  "main": "index.js",
+  "scripts": {
+    "lint": "node --check index.js",
+    "serve": "firebase emulators:start --only functions,hosting",
+    "deploy": "firebase deploy --only functions,hosting"
+  },
+  "dependencies": {
+    "firebase-functions": "^6.4.0"
+  }
+}

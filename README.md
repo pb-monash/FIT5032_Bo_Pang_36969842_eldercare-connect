@@ -52,15 +52,68 @@ For A3 external integrations, copy `.env.example` to `.env.local` and fill in on
 
 ## A3 cloud deployment
 
-The app is configured for GitHub Pages deployment through `.github/workflows/deploy.yml`. The expected public URL is:
+The repository still includes the GitHub Pages workflow used for the static A3 checkpoint, but the Exceeds-level cloud path is Firebase Hosting + Firebase Functions:
 
-`https://pb-monash.github.io/FIT5032_Bo_Pang_36969842_eldercare-connect/`
+- Firebase Hosting serves the Vue production bundle from `dist`.
+- Firebase Hosting rewrites `/api/email/queue` to the `queueEmail` Firebase Function.
+- Firebase Authentication is enabled from the front-end through the `VITE_FIREBASE_*` environment variables.
+- The email function supports Brevo or SendGrid secrets for real delivery with text attachments. Without provider secrets it still runs in `firebase-cloud-preview` mode, which is useful for safe demonstrations.
 
-GitHub repository settings must use **Pages > Build and deployment > Source: GitHub Actions** for the workflow deployment to publish successfully.
+Current Firebase project:
 
-## A3 cloud function scaffold
+- Project ID: `eldercare-connect-36969842`
+- Hosting URL: `https://eldercare-connect-36969842.web.app`
+- Email/password Firebase Authentication is configured through `firebase.json` and deployed with `firebase deploy --only auth`.
+- Firebase Functions code is ready in `functions/index.js`, but deploying Functions requires upgrading the Firebase project to the Blaze plan.
 
-The `functions/email-worker.js` file provides a safe Cloudflare Worker-style endpoint for D.2/E.1 development. It validates email requests, recipients, and attachment metadata, then returns a queued preview result. It does not send external email until a real provider integration is deliberately added with platform secrets and tutor-approved deployment settings.
+### Firebase setup
+
+1. Create a Firebase project, then copy `.firebaserc.example` to `.firebaserc` and replace the project id.
+2. In Firebase Console, enable **Authentication > Sign-in method > Email/Password**.
+3. Register a web app in Firebase Console and copy the web config into `.env.local` for local testing:
+
+```bash
+VITE_FIREBASE_API_KEY=...
+VITE_FIREBASE_AUTH_DOMAIN=...
+VITE_FIREBASE_PROJECT_ID=...
+VITE_FIREBASE_APP_ID=...
+VITE_FIREBASE_STAFF_EMAILS=staff@eldercare.org
+```
+
+4. Install Firebase CLI if needed:
+
+```bash
+npm install -g firebase-tools
+firebase login
+```
+
+5. Set at least one email provider for real D.2 delivery:
+
+```bash
+firebase functions:secrets:set BREVO_API_KEY
+firebase functions:secrets:set BREVO_SENDER_EMAIL
+firebase functions:secrets:set BREVO_SENDER_NAME
+```
+
+or use the `SENDGRID_API_KEY`, `SENDGRID_SENDER_EMAIL`, and `SENDGRID_SENDER_NAME` equivalents.
+
+6. Build and deploy:
+
+```bash
+pnpm install
+pnpm --dir functions install
+pnpm firebase:deploy
+```
+
+After deployment, verify:
+
+- the Firebase Hosting URL opens the app;
+- account registration/sign-in shows Firebase Authentication;
+- Staff hub email composer returns `delivered` when provider secrets are set, or `firebase-cloud-preview` when only the cloud function is configured.
+
+## A3 cloud function notes
+
+The legacy `functions/email-worker.js` file is retained as a Cloudflare Worker reference from the earlier scaffold. The deployed Firebase Functions entry point is `functions/index.js`.
 
 ## Demo staff account
 

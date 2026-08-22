@@ -5,3 +5,9 @@ dist/
 .env
 .env.local
 .env.*.local
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+functions/.env
+functions/.env.*
+functions/node_modules/
